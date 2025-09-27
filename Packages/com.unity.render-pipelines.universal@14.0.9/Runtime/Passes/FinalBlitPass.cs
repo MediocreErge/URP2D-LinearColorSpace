@@ -74,7 +74,7 @@ namespace UnityEngine.Rendering.Universal.Internal
             ref CameraData cameraData = ref renderingData.cameraData;
             DebugHandler debugHandler = GetActiveDebugHandler(ref renderingData);
             bool resolveToDebugScreen = debugHandler != null && debugHandler.WriteToDebugScreenTexture(ref cameraData);
-            
+
             if (resolveToDebugScreen)
             {
                 ConfigureTarget(debugHandler.DebugScreenColorHandle, debugHandler.DebugScreenDepthHandle);
@@ -125,7 +125,7 @@ namespace UnityEngine.Rendering.Universal.Internal
 
                     Vector4 hdrOutputLuminanceParams;
                     UniversalRenderPipeline.GetHDROutputLuminanceParameters(cameraData.hdrDisplayInformation, cameraData.hdrDisplayColorGamut, tonemapping, out hdrOutputLuminanceParams);
-                    
+
                     HDROutputUtils.Operation hdrOperation = HDROutputUtils.Operation.None;
                     // If the HDRDebugView is on, we don't want the encoding
                     if (debugHandler == null || !debugHandler.HDRDebugViewIsActive(ref cameraData))
@@ -148,7 +148,14 @@ namespace UnityEngine.Rendering.Universal.Internal
                 }
                 else
                 {
-                    FinalBlitPass.ExecutePass(ref renderingData, blitMaterial, cameraTargetHandle, m_Source);
+                    if (renderingData.cameraData.renderType == CameraRenderType.Overlay)
+                    {
+                        cmd.EnableShaderKeyword(ShaderKeywordStrings.RemoveGammaCorrection);
+                        FinalBlitPass.ExecutePass(ref renderingData, blitMaterial, cameraTargetHandle, m_Source);
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.RemoveGammaCorrection);
+                    }
+                    else
+                        FinalBlitPass.ExecutePass(ref renderingData, blitMaterial, cameraTargetHandle, m_Source);
                     cameraData.renderer.ConfigureCameraTarget(cameraTargetHandle, cameraTargetHandle);
                 }
             }
@@ -169,7 +176,6 @@ namespace UnityEngine.Rendering.Universal.Internal
             if (cameraData.xr.enabled)
                 loadAction = RenderBufferLoadAction.Load;
 #endif
-            
             RenderingUtils.FinalBlit(cmd, ref cameraData, source, cameraTarget, loadAction, RenderBufferStoreAction.Store, blitMaterial, source.rt?.filterMode == FilterMode.Bilinear ? 1 : 0);
         }
 
@@ -231,7 +237,6 @@ namespace UnityEngine.Rendering.Universal.Internal
 
                         SetupHDROutput(data.renderingData.cameraData.hdrDisplayColorGamut, data.blitMaterial, hdrOperation, data.hdrOutputLuminanceParams);
                     }
-
                     ExecutePass(ref data.renderingData, data.blitMaterial, data.destination, data.source);
                 });
             }

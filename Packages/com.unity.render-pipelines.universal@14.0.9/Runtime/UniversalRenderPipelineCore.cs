@@ -440,7 +440,7 @@ namespace UnityEngine.Rendering.Universal
                 if (xr.enabled)
                     hdrDisplayOutputActive = xr.isHDRDisplayOutputActive;
 #endif
-        		return hdrDisplayOutputActive && allowHDROutput && resolveToScreen;
+                return hdrDisplayOutputActive && allowHDROutput && resolveToScreen;
             }
         }
 
@@ -1019,7 +1019,7 @@ namespace UnityEngine.Rendering.Universal
         /// True if fast approximation functions are used when converting between the sRGB and Linear color spaces, false otherwise.
         /// </summary>
         public bool useFastSRGBLinearConversion;
-        
+
         /// <summary>
         /// Returns true if Data Driven Lens Flare are supported by this asset, false otherwise.
         /// </summary>
@@ -1324,6 +1324,14 @@ namespace UnityEngine.Rendering.Universal
 
         /// <summary> Keyword used for Drawing procedurally.</summary>
         public const string UseDrawProcedural = "_USE_DRAW_PROCEDURAL";
+
+        // Add By Erge
+        /// <summary> UI渲染用,手动Gamma校正 /// </summary>
+        public const string GammaCorrection = "_GAMMA_CORRECTION";
+
+        /// <summary> UI渲染用,手动Gamma校正消除 /// </summary>
+        public const string RemoveGammaCorrection = "_REMOVE_GAMMA_CORRECTION";
+        // End Add
     }
 
     public sealed partial class UniversalRenderPipeline

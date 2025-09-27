@@ -36,6 +36,9 @@ namespace UnityEngine.Rendering.Universal
         private bool m_NeedsDepth;
         private short m_CameraSortingLayerBoundsIndex;
 
+        //Add By Erge
+        RTHandle m_UguiTarget;
+
         public Render2DLightingPass(Renderer2DData rendererData, Material blitMaterial, Material samplingMaterial)
         {
             m_Renderer2DData = rendererData;
@@ -45,9 +48,11 @@ namespace UnityEngine.Rendering.Universal
             m_CameraSortingLayerBoundsIndex = GetCameraSortingLayerBoundsIndex();
         }
 
-        internal void Setup(bool useDepth)
+        internal void Setup(bool useDepth, in RTHandle uiRTHandle)
         {
             m_NeedsDepth = useDepth;
+            //Add By Erge
+            m_UguiTarget = uiRTHandle;
         }
 
         private void GetTransparencySortingMode(Camera camera, ref SortingSettings sortingSettings)
@@ -200,7 +205,6 @@ namespace UnityEngine.Rendering.Universal
                 for (var i = startIndex; i < batchCount; ++i)
                 {
                     ref var layerBatch = ref layerBatches[i];
-
                     var blendStyleMask = layerBatch.lightStats.blendStylesUsed;
                     var blendStyleCount = 0U;
                     while (blendStyleMask > 0)
@@ -248,10 +252,18 @@ namespace UnityEngine.Rendering.Universal
                     initialStoreAction = resolveDuringBatch < startIndex ? RenderBufferStoreAction.Resolve : RenderBufferStoreAction.StoreAndResolve;
                 else
                     initialStoreAction = RenderBufferStoreAction.Store;
-                CoreUtils.SetRenderTarget(cmd,
-                    colorAttachmentHandle, RenderBufferLoadAction.Load, initialStoreAction,
-                    depthAttachmentHandle, RenderBufferLoadAction.Load, initialStoreAction,
-                    ClearFlag.None, Color.clear);
+                //Add By Erge
+                if (renderingData.cameraData.renderType == CameraRenderType.Overlay)
+                    CoreUtils.SetRenderTarget(cmd,
+                        m_UguiTarget, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store,
+                        depthAttachmentHandle, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.DontCare,
+                        ClearFlag.None, Color.clear);
+                else
+                    //End Add
+                    CoreUtils.SetRenderTarget(cmd,
+                        colorAttachmentHandle, RenderBufferLoadAction.Load, initialStoreAction,
+                        depthAttachmentHandle, RenderBufferLoadAction.Load, initialStoreAction,
+                        ClearFlag.None, Color.clear);
 
                 for (var i = startIndex; i < startIndex + batchesDrawn; i++)
                 {
@@ -284,7 +296,6 @@ namespace UnityEngine.Rendering.Universal
                                 RendererLighting.EnableBlendStyle(cmd, blendStyleIndex, blendStyleIndex == 0);
                             }
                         }
-
                         context.ExecuteCommandBuffer(cmd);
                         cmd.Clear();
 
@@ -386,7 +397,6 @@ namespace UnityEngine.Rendering.Universal
 
                 var layerBatches = LayerUtility.CalculateBatches(m_Renderer2DData.lightCullResult, out var batchCount);
                 var batchesDrawn = 0;
-
                 for (var i = 0; i < batchCount; i += batchesDrawn)
                     batchesDrawn = DrawLayerBatches(layerBatches, batchCount, i, cmd, context, ref renderingData, ref filterSettings, ref normalsDrawSettings, ref combinedDrawSettings, ref desc);
 
@@ -408,10 +418,16 @@ namespace UnityEngine.Rendering.Universal
                 var cmd = renderingData.commandBuffer;
                 using (new ProfilingScope(cmd, m_ProfilingSamplerUnlit))
                 {
-                    CoreUtils.SetRenderTarget(cmd,
-                        colorAttachmentHandle, RenderBufferLoadAction.Load, storeAction,
-                        depthAttachmentHandle, RenderBufferLoadAction.Load, storeAction,
-                        ClearFlag.None, Color.clear);
+                    if (renderingData.cameraData.renderType == CameraRenderType.Base)
+                        CoreUtils.SetRenderTarget(cmd,
+                            colorAttachmentHandle, RenderBufferLoadAction.Load, storeAction,
+                            depthAttachmentHandle, RenderBufferLoadAction.Load, storeAction,
+                            ClearFlag.None, Color.clear);
+                    else
+                        CoreUtils.SetRenderTarget(cmd,
+                            m_UguiTarget, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store,
+                            depthAttachmentHandle, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.DontCare,
+                            ClearFlag.None, Color.clear);
 
                     cmd.SetGlobalFloat(k_UseSceneLightingID, isLitView ? 1.0f : 0.0f);
                     cmd.SetGlobalColor(k_RendererColorID, Color.white);
@@ -444,8 +460,10 @@ namespace UnityEngine.Rendering.Universal
                 {
                     Render(context, cmd, ref renderingData, ref filterSettings, unlitDrawSettings);
                 }
+
                 Profiler.EndSample();
             }
+
 
             filterSettings.sortingLayerRange = SortingLayerRange.all;
             RenderingUtils.RenderObjectsWithError(context, ref renderingData.cullResults, camera, filterSettings, SortingCriteria.None);

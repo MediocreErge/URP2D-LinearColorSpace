@@ -47,6 +47,8 @@ namespace UnityEngine.Rendering.Universal
         RTHandle m_EdgeStencilTexture;
         RTHandle m_TempTarget;
         RTHandle m_TempTarget2;
+        //Custom UI Target
+        RTHandle m_UguiTarget;
 
         const string k_RenderPostProcessingTag = "Render PostProcessing Effects";
         const string k_RenderFinalPostProcessingTag = "Render Final PostProcessing Pass";
@@ -98,7 +100,7 @@ namespace UnityEngine.Rendering.Universal
 
         // Use Fast conversions between SRGB and Linear
         bool m_UseFastSRGBLinearConversion;
-        
+
         // Support Data Driven Lens Flare post process effect
         bool m_SupportDataDrivenLensFlare;
 
@@ -251,7 +253,7 @@ namespace UnityEngine.Rendering.Universal
         /// <param name="internalLut"></param>
         /// <param name="hasFinalPass"></param>
         /// <param name="enableColorEncoding"></param>
-        public void Setup(in RenderTextureDescriptor baseDescriptor, in RTHandle source, RTHandle destination, in RTHandle depth, in RTHandle internalLut, bool hasFinalPass, bool enableColorEncoding)
+        public void Setup(in RenderTextureDescriptor baseDescriptor, in RTHandle source, RTHandle destination, in RTHandle depth, in RTHandle internalLut, bool hasFinalPass, bool enableColorEncoding, in RTHandle uiRTHandle, bool useSwapBuffer)
         {
             m_Descriptor = baseDescriptor;
             m_Descriptor.useMipMap = false;
@@ -263,7 +265,10 @@ namespace UnityEngine.Rendering.Universal
             m_IsFinalPass = false;
             m_HasFinalPass = hasFinalPass;
             m_EnableColorEncodingIfNeeded = enableColorEncoding;
-            m_UseSwapBuffer = true;
+            m_UseSwapBuffer = useSwapBuffer;
+            //Add By Erge
+            m_UguiTarget = uiRTHandle;
+            m_ResolveToScreen = false;
         }
 
         /// <summary>
@@ -614,6 +619,11 @@ namespace UnityEngine.Rendering.Universal
                         destination = renderer.GetCameraColorFrontBuffer(cmd);
                     }
                     Blitter.BlitCameraTexture(cmd, GetSource(), destination, colorLoadAction, RenderBufferStoreAction.Store, m_Materials.uber, 0);
+                    //Add By Erge
+                    cmd.EnableShaderKeyword(ShaderKeywordStrings.GammaCorrection);
+                    Blitter.BlitCameraTexture(cmd, GetSource(), m_UguiTarget, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store, m_Materials.uber, 0);
+                    cmd.DisableShaderKeyword(ShaderKeywordStrings.GammaCorrection);
+                    //End Add
                     renderer.ConfigureCameraColorTarget(destination);
                     Swap(ref renderer);
                 }
@@ -626,6 +636,7 @@ namespace UnityEngine.Rendering.Universal
                     var firstSource = GetSource();
                     Blitter.BlitCameraTexture(cmd, firstSource, GetDestination(), colorLoadAction, RenderBufferStoreAction.Store, m_Materials.uber, 0);
                     Blitter.BlitCameraTexture(cmd, GetDestination(), m_Destination, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store, m_BlitMaterial, m_Destination.rt?.filterMode == FilterMode.Bilinear ? 1 : 0);
+                    Blitter.BlitCameraTexture(cmd, m_Destination, firstSource, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store, m_BlitMaterial, firstSource.rt?.filterMode == FilterMode.Bilinear ? 1 : 0);
                 }
                 else if (m_ResolveToScreen)
                 {
@@ -641,7 +652,6 @@ namespace UnityEngine.Rendering.Universal
                         RenderTargetIdentifier cameraTarget = cameraData.targetTexture != null ? new RenderTargetIdentifier(cameraData.targetTexture) : cameraTargetID;
                         RTHandleStaticHelpers.SetRTHandleStaticWrapper(cameraTarget);
                         var cameraTargetHandle = RTHandleStaticHelpers.s_RTHandleWrapper;
-
                         RenderingUtils.FinalBlit(cmd, ref cameraData, GetSource(), cameraTargetHandle, colorLoadAction, RenderBufferStoreAction.Store, m_Materials.uber, 0);
                         renderer.ConfigureCameraColorTarget(cameraTargetHandle);
                     }
@@ -953,9 +963,9 @@ namespace UnityEngine.Rendering.Universal
                 false);
         }
 
-    #endregion
+        #endregion
 
-    #region Motion Blur
+        #region Motion Blur
 
         internal static readonly int k_ShaderPropertyId_ViewProjM = Shader.PropertyToID("_ViewProjM");
         internal static readonly int k_ShaderPropertyId_PrevViewProjM = Shader.PropertyToID("_PrevViewProjM");
@@ -966,7 +976,7 @@ namespace UnityEngine.Rendering.Universal
         {
             MotionVectorsPersistentData motionData = null;
 
-            if(camera.TryGetComponent<UniversalAdditionalCameraData>(out var additionalCameraData))
+            if (camera.TryGetComponent<UniversalAdditionalCameraData>(out var additionalCameraData))
                 motionData = additionalCameraData.motionVectorsPersistentData;
 
             if (motionData == null)
@@ -1008,9 +1018,9 @@ namespace UnityEngine.Rendering.Universal
             Blitter.BlitCameraTexture(cmd, source, destination, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store, material, (int)m_MotionBlur.quality.value);
         }
 
-#endregion
+        #endregion
 
-#region Panini Projection
+        #region Panini Projection
 
         // Back-ported & adapted from the work of the Stockholm demo team - thanks Lasse!
         void DoPaniniProjection(Camera camera, CommandBuffer cmd, RTHandle source, RTHandle destination)
@@ -1082,9 +1092,9 @@ namespace UnityEngine.Rendering.Universal
             return cylPos * (viewDist / cylDist);
         }
 
-#endregion
+        #endregion
 
-#region Bloom
+        #region Bloom
 
         void SetupBloom(CommandBuffer cmd, RTHandle source, Material uberMaterial)
         {
@@ -1199,9 +1209,9 @@ namespace UnityEngine.Rendering.Universal
                 uberMaterial.EnableKeyword(dirtIntensity > 0f ? ShaderKeywordStrings.BloomLQDirt : ShaderKeywordStrings.BloomLQ);
         }
 
-#endregion
+        #endregion
 
-#region Lens Distortion
+        #region Lens Distortion
 
         void SetupLensDistortion(Material material, bool isSceneView)
         {
@@ -1229,9 +1239,9 @@ namespace UnityEngine.Rendering.Universal
                 material.EnableKeyword(ShaderKeywordStrings.Distortion);
         }
 
-#endregion
+        #endregion
 
-#region Chromatic Aberration
+        #region Chromatic Aberration
 
         void SetupChromaticAberration(Material material)
         {
@@ -1241,9 +1251,9 @@ namespace UnityEngine.Rendering.Universal
                 material.EnableKeyword(ShaderKeywordStrings.ChromaticAberration);
         }
 
-#endregion
+        #endregion
 
-#region Vignette
+        #region Vignette
 
         void SetupVignette(Material material, XRPass xrPass)
         {
@@ -1278,9 +1288,9 @@ namespace UnityEngine.Rendering.Universal
             material.SetVector(ShaderConstants._Vignette_Params2, v2);
         }
 
-#endregion
+        #endregion
 
-#region Color Grading
+        #region Color Grading
 
         void SetupColorGrading(CommandBuffer cmd, ref RenderingData renderingData, Material material)
         {
@@ -1317,9 +1327,9 @@ namespace UnityEngine.Rendering.Universal
             }
         }
 
-#endregion
+        #endregion
 
-#region Film Grain
+        #region Film Grain
 
         void SetupGrain(ref CameraData cameraData, Material material)
         {
@@ -1336,9 +1346,9 @@ namespace UnityEngine.Rendering.Universal
             }
         }
 
-#endregion
+        #endregion
 
-#region 8-bit Dithering
+        #region 8-bit Dithering
 
         void SetupDithering(ref CameraData cameraData, Material material)
         {
@@ -1357,7 +1367,7 @@ namespace UnityEngine.Rendering.Universal
 
         #endregion
 
-#region HDR Output
+        #region HDR Output
         void SetupHDROutput(HDROutputUtils.HDRDisplayInformation hdrDisplayInformation, ColorGamut hdrDisplayColorGamut, Material material, HDROutputUtils.Operation hdrOperations)
         {
             Vector4 hdrOutputLuminanceParams;
@@ -1366,9 +1376,9 @@ namespace UnityEngine.Rendering.Universal
 
             HDROutputUtils.ConfigureHDROutput(material, hdrDisplayColorGamut, hdrOperations);
         }
-#endregion
+        #endregion
 
-#region Final pass
+        #region Final pass
 
         void RenderFinalPass(CommandBuffer cmd, ref RenderingData renderingData)
         {
@@ -1396,7 +1406,7 @@ namespace UnityEngine.Rendering.Universal
 
                 SetupHDROutput(cameraData.hdrDisplayInformation, cameraData.hdrDisplayColorGamut, material, hdrOperations);
             }
-            
+
             DebugHandler debugHandler = GetActiveDebugHandler(ref renderingData);
             bool resolveToDebugScreen = debugHandler != null && debugHandler.WriteToDebugScreenTexture(ref cameraData);
             debugHandler?.UpdateShaderGlobalPropertiesForFinalValidationPass(cmd, ref cameraData, m_IsFinalPass && !resolveToDebugScreen);
@@ -1466,76 +1476,76 @@ namespace UnityEngine.Rendering.Universal
                 switch (cameraData.imageScalingMode)
                 {
                     case ImageScalingMode.Upscaling:
-                    {
-                        // In the upscaling case, set material keywords based on the selected upscaling filter
-                        // Note: If FSR is enabled, we go down this path regardless of the current render scale. We do this because
-                        //       FSR still provides visual benefits at 100% scale. This will also make the transition between 99% and 100%
-                        //       scale less obvious for cases where FSR is used with dynamic resolution scaling.
-                        switch (cameraData.upscalingFilter)
                         {
-                            case ImageUpscalingFilter.Point:
+                            // In the upscaling case, set material keywords based on the selected upscaling filter
+                            // Note: If FSR is enabled, we go down this path regardless of the current render scale. We do this because
+                            //       FSR still provides visual benefits at 100% scale. This will also make the transition between 99% and 100%
+                            //       scale less obvious for cases where FSR is used with dynamic resolution scaling.
+                            switch (cameraData.upscalingFilter)
                             {
-                                // TAA post sharpening is an RCAS pass, avoid overriding it with point sampling.
-                                if(!isTaaSharpeningEnabled)
-                                    material.EnableKeyword(ShaderKeywordStrings.PointSampling);
-                                break;
+                                case ImageUpscalingFilter.Point:
+                                    {
+                                        // TAA post sharpening is an RCAS pass, avoid overriding it with point sampling.
+                                        if (!isTaaSharpeningEnabled)
+                                            material.EnableKeyword(ShaderKeywordStrings.PointSampling);
+                                        break;
+                                    }
+
+                                case ImageUpscalingFilter.Linear:
+                                    {
+                                        // Do nothing as linear is the default filter in the shader
+                                        break;
+                                    }
+
+                                case ImageUpscalingFilter.FSR:
+                                    {
+                                        m_Materials.easu.shaderKeywords = null;
+
+                                        var upscaleRtDesc = tempRtDesc;
+                                        upscaleRtDesc.width = cameraData.pixelWidth;
+                                        upscaleRtDesc.height = cameraData.pixelHeight;
+
+                                        // EASU
+                                        RenderingUtils.ReAllocateIfNeeded(ref m_UpscaledTarget, upscaleRtDesc, FilterMode.Point, TextureWrapMode.Clamp, name: "_UpscaledTexture");
+                                        var fsrInputSize = new Vector2(cameraData.cameraTargetDescriptor.width, cameraData.cameraTargetDescriptor.height);
+                                        var fsrOutputSize = new Vector2(cameraData.pixelWidth, cameraData.pixelHeight);
+                                        FSRUtils.SetEasuConstants(cmd, fsrInputSize, fsrInputSize, fsrOutputSize);
+
+                                        Blitter.BlitCameraTexture(cmd, sourceTex, m_UpscaledTarget, colorLoadAction, RenderBufferStoreAction.Store, m_Materials.easu, 0);
+
+                                        // RCAS
+                                        // Use the override value if it's available, otherwise use the default.
+                                        float sharpness = cameraData.fsrOverrideSharpness ? cameraData.fsrSharpness : FSRUtils.kDefaultSharpnessLinear;
+
+                                        // Set up the parameters for the RCAS pass unless the sharpness value indicates that it wont have any effect.
+                                        if (cameraData.fsrSharpness > 0.0f)
+                                        {
+                                            // RCAS is performed during the final post blit, but we set up the parameters here for better logical grouping.
+                                            material.EnableKeyword(requireHDROutput ? ShaderKeywordStrings.EasuRcasAndHDRInput : ShaderKeywordStrings.Rcas);
+                                            FSRUtils.SetRcasConstantsLinear(cmd, sharpness);
+                                        }
+
+                                        // Update the source texture for the next operation
+                                        sourceTex = m_UpscaledTarget;
+                                        PostProcessUtils.SetSourceSize(cmd, upscaleRtDesc);
+
+                                        break;
+                                    }
                             }
 
-                            case ImageUpscalingFilter.Linear:
-                            {
-                                // Do nothing as linear is the default filter in the shader
-                                break;
-                            }
-
-                            case ImageUpscalingFilter.FSR:
-                            {
-                                m_Materials.easu.shaderKeywords = null;
-
-                                var upscaleRtDesc = tempRtDesc;
-                                upscaleRtDesc.width = cameraData.pixelWidth;
-                                upscaleRtDesc.height = cameraData.pixelHeight;
-
-                                // EASU
-                                RenderingUtils.ReAllocateIfNeeded(ref m_UpscaledTarget, upscaleRtDesc, FilterMode.Point, TextureWrapMode.Clamp, name: "_UpscaledTexture");
-                                var fsrInputSize = new Vector2(cameraData.cameraTargetDescriptor.width, cameraData.cameraTargetDescriptor.height);
-                                var fsrOutputSize = new Vector2(cameraData.pixelWidth, cameraData.pixelHeight);
-                                FSRUtils.SetEasuConstants(cmd, fsrInputSize, fsrInputSize, fsrOutputSize);
-
-                                Blitter.BlitCameraTexture(cmd, sourceTex, m_UpscaledTarget, colorLoadAction, RenderBufferStoreAction.Store, m_Materials.easu, 0);
-
-                                // RCAS
-                                // Use the override value if it's available, otherwise use the default.
-                                float sharpness = cameraData.fsrOverrideSharpness ? cameraData.fsrSharpness : FSRUtils.kDefaultSharpnessLinear;
-
-                                // Set up the parameters for the RCAS pass unless the sharpness value indicates that it wont have any effect.
-                                if (cameraData.fsrSharpness > 0.0f)
-                                {
-                                    // RCAS is performed during the final post blit, but we set up the parameters here for better logical grouping.
-                                    material.EnableKeyword(requireHDROutput ? ShaderKeywordStrings.EasuRcasAndHDRInput : ShaderKeywordStrings.Rcas);
-                                    FSRUtils.SetRcasConstantsLinear(cmd, sharpness);
-                                }
-
-                                // Update the source texture for the next operation
-                                sourceTex = m_UpscaledTarget;
-                                PostProcessUtils.SetSourceSize(cmd, upscaleRtDesc);
-
-                                break;
-                            }
+                            break;
                         }
 
-                        break;
-                    }
-
                     case ImageScalingMode.Downscaling:
-                    {
-                        // In the downscaling case, we don't perform any sort of filter override logic since we always want linear filtering
-                        // and it's already the default option in the shader.
+                        {
+                            // In the downscaling case, we don't perform any sort of filter override logic since we always want linear filtering
+                            // and it's already the default option in the shader.
 
-                        // Also disable TAA post sharpening pass when downscaling.
-                        isTaaSharpeningEnabled = false;
+                            // Also disable TAA post sharpening pass when downscaling.
+                            isTaaSharpeningEnabled = false;
 
-                        break;
-                    }
+                            break;
+                        }
                 }
             }
             else if (isFxaaEnabled)
@@ -1546,12 +1556,12 @@ namespace UnityEngine.Rendering.Universal
 
             // Reuse RCAS as a standalone sharpening filter for TAA.
             // If FSR is enabled then it overrides the TAA setting and we skip it.
-            if(isTaaSharpeningEnabled)
+            if (isTaaSharpeningEnabled)
             {
                 material.EnableKeyword(ShaderKeywordStrings.Rcas);
                 FSRUtils.SetRcasConstantsLinear(cmd, cameraData.taaSettings.contrastAdaptiveSharpening);
             }
-            
+
             var cameraTarget = RenderingUtils.GetCameraTargetIdentifier(ref renderingData);
 
             if (resolveToDebugScreen)
@@ -1569,9 +1579,9 @@ namespace UnityEngine.Rendering.Universal
             }
         }
 
-#endregion
+        #endregion
 
-#region Internal utilities
+        #region Internal utilities
 
         class MaterialLibrary
         {
@@ -1706,6 +1716,6 @@ namespace UnityEngine.Rendering.Universal
             public static int[] _BloomMipDown;
         }
 
-#endregion
+        #endregion
     }
 }

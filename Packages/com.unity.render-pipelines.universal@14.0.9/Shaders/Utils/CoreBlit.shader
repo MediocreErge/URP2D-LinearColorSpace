@@ -32,6 +32,9 @@ Shader "Hidden/Universal/CoreBlit"
             ZWrite Off ZTest Always Blend Off Cull Off
 
             HLSLPROGRAM
+        // Add By Erge
+                #pragma multi_compile _ _REMOVE_GAMMA_CORRECTION
+        // End Add
                 #pragma vertex Vert
                 #pragma fragment FragBilinear
             ENDHLSL

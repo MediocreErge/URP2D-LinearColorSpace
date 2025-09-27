@@ -48,14 +48,14 @@ Varyings Vert(Attributes input)
 
 #if SHADER_API_GLES
     float4 pos = input.positionOS;
-    float2 uv  = input.uv;
+    float2 uv = input.uv;
 #else
     float4 pos = GetFullScreenTriangleVertexPosition(input.vertexID);
-    float2 uv  = GetFullScreenTriangleTexCoord(input.vertexID);
+    float2 uv = GetFullScreenTriangleTexCoord(input.vertexID);
 #endif
 
     output.positionCS = pos;
-    output.texcoord   = uv * _BlitScaleBias.xy + _BlitScaleBias.zw;
+    output.texcoord = uv * _BlitScaleBias.xy + _BlitScaleBias.zw;
     return output;
 }
 
@@ -67,15 +67,15 @@ Varyings VertQuad(Attributes input)
 
 #if SHADER_API_GLES
     float4 pos = input.positionOS;
-    float2 uv  = input.uv;
+    float2 uv = input.uv;
 #else
     float4 pos = GetQuadVertexPosition(input.vertexID);
-    float2 uv  = GetQuadTexCoord(input.vertexID);
+    float2 uv = GetQuadTexCoord(input.vertexID);
 #endif
 
-    output.positionCS    = pos * float4(_BlitScaleBiasRt.x, _BlitScaleBiasRt.y, 1, 1) + float4(_BlitScaleBiasRt.z, _BlitScaleBiasRt.w, 0, 0);
+    output.positionCS = pos * float4(_BlitScaleBiasRt.x, _BlitScaleBiasRt.y, 1, 1) + float4(_BlitScaleBiasRt.z, _BlitScaleBiasRt.w, 0, 0);
     output.positionCS.xy = output.positionCS.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f); //convert to -1..1
-    output.texcoord      = uv * _BlitScaleBias.xy + _BlitScaleBias.zw;
+    output.texcoord = uv * _BlitScaleBias.xy + _BlitScaleBias.zw;
     return output;
 }
 
@@ -90,10 +90,10 @@ Varyings VertQuadPadding(Attributes input)
 
 #if SHADER_API_GLES
     float4 pos = input.positionOS;
-    float2 uv  = input.uv;
+    float2 uv = input.uv;
 #else
     float4 pos = GetQuadVertexPosition(input.vertexID);
-    float2 uv  = GetQuadTexCoord(input.vertexID);
+    float2 uv = GetQuadTexCoord(input.vertexID);
 #endif
 
     output.positionCS = pos * float4(_BlitScaleBiasRt.x, _BlitScaleBiasRt.y, 1, 1) + float4(_BlitScaleBiasRt.z, _BlitScaleBiasRt.w, 0, 0);
@@ -111,7 +111,13 @@ float4 FragBlit(Varyings input, SamplerState s)
 #endif
 
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+    // Add By Erge
+#if defined(_REMOVE_GAMMA_CORRECTION)
+    return SRGBToLinear(SAMPLE_TEXTURE2D_X_LOD(_BlitTexture, s, input.texcoord.xy, _BlitMipLevel));
+#else
+    // End Add
     return SAMPLE_TEXTURE2D_X_LOD(_BlitTexture, s, input.texcoord.xy, _BlitMipLevel);
+#endif
 }
 
 float4 FragNearest(Varyings input) : SV_Target
@@ -149,7 +155,7 @@ float4 FragOctahedralProject(Varyings input) : SV_Target
 {
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
     float2 UV = saturate(input.texcoord);
-    float3 dir = UnpackNormalOctQuadEncode(2.0f*UV - 1.0f);
+    float3 dir = UnpackNormalOctQuadEncode(2.0f * UV - 1.0f);
     return float4(SAMPLE_TEXTURECUBE_LOD(_BlitCubeTexture, sampler_LinearRepeat, dir, _BlitMipLevel).rgb, 1);
 }
 
@@ -183,7 +189,7 @@ float4 FragOctahedralProjectLuminance(Varyings input) : SV_Target
 {
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
     float2 UV = saturate(input.texcoord);
-    float3 dir = UnpackNormalOctQuadEncode(2.0f*UV - 1.0f);
+    float3 dir = UnpackNormalOctQuadEncode(2.0f * UV - 1.0f);
     // sRGB/Rec.709
     return Luminance(SAMPLE_TEXTURECUBE_LOD(_BlitCubeTexture, sampler_LinearRepeat, dir, _BlitMipLevel)).xxxx;
 }
@@ -192,7 +198,7 @@ float4 FragOctahedralProjectRedToRGBA(Varyings input) : SV_Target
 {
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
     float2 UV = saturate(input.texcoord);
-    float3 dir = UnpackNormalOctQuadEncode(2.0f*UV - 1.0f);
+    float3 dir = UnpackNormalOctQuadEncode(2.0f * UV - 1.0f);
     return SAMPLE_TEXTURECUBE_LOD(_BlitCubeTexture, sampler_LinearRepeat, dir, _BlitMipLevel).rrrr;
 }
 
@@ -200,7 +206,7 @@ float4 FragOctahedralProjectAlphaToRGBA(Varyings input) : SV_Target
 {
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
     float2 UV = saturate(input.texcoord);
-    float3 dir = UnpackNormalOctQuadEncode(2.0f*UV - 1.0f);
+    float3 dir = UnpackNormalOctQuadEncode(2.0f * UV - 1.0f);
     return SAMPLE_TEXTURECUBE_LOD(_BlitCubeTexture, sampler_LinearRepeat, dir, _BlitMipLevel).aaaa;
 }
 

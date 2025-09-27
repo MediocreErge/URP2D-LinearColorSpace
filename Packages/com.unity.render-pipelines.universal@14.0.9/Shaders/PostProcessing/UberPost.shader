@@ -257,6 +257,10 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
             }
             #endif
 
+            #if defined(_GAMMA_CORRECTION)
+            color = LinearToSRGB(color);
+            #endif
+
             #if _DITHERING
             {
                 color = ApplyDithering(color, uv, TEXTURE2D_ARGS(_BlueNoise_Texture, sampler_PointRepeat), DitheringScale, DitheringOffset, PaperWhite, OneOverPaperWhite);
@@ -302,6 +306,9 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
             Name "UberPost"
 
             HLSLPROGRAM
+            // Add By Erge
+                #pragma multi_compile _ _GAMMA_CORRECTION
+            // End Add
                 #pragma vertex Vert
                 #pragma fragment FragUberPost
             ENDHLSL
