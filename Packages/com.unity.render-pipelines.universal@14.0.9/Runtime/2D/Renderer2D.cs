@@ -23,9 +23,6 @@ namespace UnityEngine.Rendering.Universal
         DrawScreenSpaceUIPass m_DrawOffscreenUIPass;
         DrawScreenSpaceUIPass m_DrawOverlayUIPass;
         Light2DCullResult m_LightCullResult;
-        //Custom
-        MainLightShadowCasterPass m_MainLightShadowCasterPass;
-        DepthOnlyPass m_DepthPrepass;
 
         internal RenderTargetBufferSystem m_ColorBufferSystem;
 
@@ -39,7 +36,6 @@ namespace UnityEngine.Rendering.Universal
         // as they must be the same across all ScriptableRenderer types for camera stacking to work.
         RTHandle m_ColorTextureHandle;
         RTHandle m_DepthTextureHandle;
-        RTHandle m_DepthTexture;
 
         Material m_BlitMaterial;
         Material m_BlitHDRMaterial;
@@ -77,10 +73,6 @@ namespace UnityEngine.Rendering.Universal
             m_PixelPerfectBackgroundPass = new PixelPerfectBackgroundPass(RenderPassEvent.AfterRenderingTransparents);
             m_UpscalePass = new UpscalePass(RenderPassEvent.AfterRenderingPostProcessing, m_BlitMaterial);
             m_FinalBlitPass = new FinalBlitPass(RenderPassEvent.AfterRendering + k_FinalBlitPassQueueOffset, m_BlitMaterial, m_BlitHDRMaterial);
-
-            //Custom
-            m_MainLightShadowCasterPass = new MainLightShadowCasterPass(RenderPassEvent.BeforeRenderingShadows);
-            m_DepthPrepass = new DepthOnlyPass(RenderPassEvent.BeforeRenderingPrePasses, RenderQueueRange.opaque, LayerMask.GetMask("Default", "Obstacle", "Character", "Ground", "TallWall", "Destructible"));
 
             m_DrawOffscreenUIPass = new DrawScreenSpaceUIPass(RenderPassEvent.BeforeRenderingPostProcessing, true);
             m_DrawOverlayUIPass = new DrawScreenSpaceUIPass(RenderPassEvent.AfterRendering + k_AfterFinalBlitPassQueueOffset, false); // after m_FinalBlitPass
@@ -476,52 +468,13 @@ namespace UnityEngine.Rendering.Universal
             {
                 EnqueuePass(m_DrawOverlayUIPass);
             }
-
-            //----------------------------------Custom DepthTexture----------------------------------
-            var depthDescriptor = cameraTargetDescriptor;
-            bool requiresDepthTexture = cameraData.requiresDepthTexture || renderPassInputs.requiresDepthTexture;
-            if (requiresDepthTexture || !RenderingUtils.SupportsGraphicsFormat(GraphicsFormat.R32_SFloat, FormatUsage.Render))
-            {
-                depthDescriptor.graphicsFormat = GraphicsFormat.None;
-                depthDescriptor.depthStencilFormat = k_DepthStencilFormat;
-                depthDescriptor.depthBufferBits = k_DepthBufferBits;
-            }
-            else
-            {
-                depthDescriptor.graphicsFormat = GraphicsFormat.R32_SFloat;
-                depthDescriptor.depthStencilFormat = GraphicsFormat.None;
-                depthDescriptor.depthBufferBits = 0;
-            }
-
-            depthDescriptor.msaaSamples = 1;// Depth-Only pass don't use MSAA
-            RenderingUtils.ReAllocateIfNeeded(ref m_DepthTexture, depthDescriptor, FilterMode.Point, wrapMode: TextureWrapMode.Clamp, name: "_CameraDepthTexture");
-
-            cmd.SetGlobalTexture(m_DepthTexture.name, m_DepthTexture.nameID);
-            context.ExecuteCommandBuffer(cmd);
-            cmd.Clear();
-            //----------------------------------Custom Code Shadow---------------------------------------
-            bool mainLightShadows = m_MainLightShadowCasterPass.Setup(ref renderingData);
-            if (mainLightShadows) EnqueuePass(m_MainLightShadowCasterPass);
-
-            m_DepthPrepass.Setup(cameraTargetDescriptor, m_DepthTexture);
-            EnqueuePass(m_DepthPrepass);
         }
 
         public override void SetupCullingParameters(ref ScriptableCullingParameters cullingParameters, ref CameraData cameraData)
         {
-            //cullingParameters.cullingOptions = CullingOptions.None;
-            //cullingParameters.isOrthographic = cameraData.camera.orthographic;
-            //cullingParameters.shadowDistance = 0.0f;
-            bool isShadowCastingDisabled = !UniversalRenderPipeline.asset.supportsMainLightShadows && !UniversalRenderPipeline.asset.supportsAdditionalLightShadows;
-            bool isShadowDistanceZero = Mathf.Approximately(cameraData.maxShadowDistance, 0.0f);
-            if (isShadowCastingDisabled || isShadowDistanceZero)
-            {
-                cullingParameters.cullingOptions &= ~CullingOptions.ShadowCasters;
-            }
-
-            cullingParameters.maximumVisibleLights = UniversalRenderPipeline.maxVisibleAdditionalLights + 1;
-            cullingParameters.shadowDistance = cameraData.maxShadowDistance;
-            m_LightCullResult.SetupCulling(ref cullingParameters, cameraData.camera);
+            cullingParameters.cullingOptions = CullingOptions.None;
+            cullingParameters.isOrthographic = cameraData.camera.orthographic;
+            cullingParameters.shadowDistance = 0.0f;
         }
 
         internal override void SwapColorBuffer(CommandBuffer cmd)
